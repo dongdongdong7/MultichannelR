@@ -21,14 +21,16 @@ library(tidyverse)
     Q3_P1 <- c(199.1351, 201.1482, 203.1604, 205.1734, 207.1857, 209.1986)
     Q3 <- c(Q3_A1, Q3_A2, Q3_A3, Q3_P1)
     
-    cwp_centroid <- xcms::CentWaveParam(snthresh = 0, noise = 0, ppm = 10,
-                                        peakwidth = c(1, 10), firstBaselineCheck = FALSE)
+    cwp_centroid <- xcms::CentWaveParam(snthresh = 3, noise = 1000, ppm = 25,
+                                        peakwidth = c(4, 20), firstBaselineCheck = TRUE, prefilter = c(3, 1000))
+    
+    quan <- "into" # into, intb, maxo
   }
   
   # 0.2 Load data
   {
-    res_dir <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/"
-    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/test_data/mix6/"
+    res_dir <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/experiments/240812/"
+    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/test_data/mix1/"
     files_path <- list.files(dir_path, pattern = ".mzML")
     files_path <- paste0(dir_path, files_path)
     
@@ -387,6 +389,35 @@ library(tidyverse)
       df$mz <- mz;df$rt <- rt;df$class <- class
       return(df)
     }
+    # 9. Extract chrDf
+    # chrDf_test <- extract_chrDf(sps = sps, mzmin = 343.1400, mzmax = 343.1600, rtmin = 280.00, rtmax = 310.00, sample = 1)
+    # MetaboProcess::plot_chrDf(chrDf_test)
+    # xcms::peaksWithCentWave(int = chrDf_test$intensity, rt = chrDf_test$rt, peakwidth = c(4, 20), snthresh = 1, noise = 1000, prefilter = c(3, 1000), firstBaselineCheck = TRUE)
+    # tmp <- MSnbase::chromatogram(MSnbaseData, rt = c(295.783, 305.663), mz = c(337.1214, 337.1221))
+    # MSnbase::plot(tmp[1,3])
+    extract_chrDf <- function(sps, mzmin, mzmax, rtmin, rtmax, sample){
+      filePath <- unique(Spectra::dataOrigin(sps))[sample]
+      sps <- sps %>%
+        Spectra::filterDataOrigin(filePath) %>%
+        Spectra::filterMzRange(c(mzmin, mzmax)) %>%
+        Spectra::filterRt(c(rtmin, rtmax)) %>% 
+        Spectra::filterMsLevel(1L)
+      peaksData <- Spectra::peaksData(sps)
+      peaksData <- lapply(peaksData, as.data.frame)
+      rt <- Spectra::rtime(sps)
+      idx <- which(sapply(peaksData, nrow) != 0)
+      peaksData <- peaksData[idx]
+      peaksData <- lapply(peaksData, function(x) {
+        if(nrow(x) > 1){
+          x <- x[which.max(x[, "intensity"]), ]
+        }
+        return(x)
+      })
+      rt <- rt[idx]
+      chrDf <- purrr::list_rbind(peaksData)
+      chrDf$rt <- rt
+      return(chrDf)
+    }
   }
 }
 # ****** 0. Initialize ****** #
@@ -734,14 +765,37 @@ library(tidyverse)
         alignedGroup_tmp <- alignedGroup[j, ]
         peakGroup <- alignedGroup_tmp$peakGroup[[1]]
         for(m in as.vector(peakGroup$channelIdx)){
-          report_tmp[1, paste0(j, "_", m)] <- peakGroup$intb[peakGroup$channelIdx == m]
+          report_tmp[1, paste0(j, "_", m)] <- as.numeric(unlist(peakGroup[, quan]))[peakGroup$channelIdx == m]
         }
       }
       report <- rbind(report, report_tmp)
     }
   }
   
-  # 5.2 输出report表格
+  # 5.2 mae%rmse 计算
+  {
+    maeVec <- sapply(1:nrow(report), function(i) {
+      values <- report[i, 8:25][!is.na(report[i, 8:25])]
+      ratios <- outer(values, values, "/")
+      ratios_upper <- ratios[upper.tri(ratios)]
+      differences <- ratios_upper - 1
+      mae <- mean(abs(differences))
+      return(mae)
+    })
+    report$mae <- maeVec
+    
+    rmseVec <- sapply(1:nrow(report), function(i) {
+      values <- report[i, 8:25][!is.na(report[i, 8:25])]
+      ratios <- outer(values, values, "/")
+      ratios_upper <- ratios[upper.tri(ratios)]
+      differences <- ratios_upper - 1
+      rmse <- sqrt(mean(differences^2))
+      return(rmse)
+    })
+    report$rmse <- rmseVec
+  }
+  
+  # 5.3 输出report表格
   {
     openxlsx::write.xlsx(report, file = paste0(res_dir, "report.xlsx"))
   }
