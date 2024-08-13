@@ -30,7 +30,7 @@ library(tidyverse)
   # 0.2 Load data
   {
     res_dir <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/experiments/240812/"
-    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/test_data/mix1/"
+    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/test_data/mix6/"
     files_path <- list.files(dir_path, pattern = ".mzML")
     files_path <- paste0(dir_path, files_path)
     
@@ -390,9 +390,9 @@ library(tidyverse)
       return(df)
     }
     # 9. Extract chrDf
-    # chrDf_test <- extract_chrDf(sps = sps, mzmin = 343.1400, mzmax = 343.1600, rtmin = 280.00, rtmax = 310.00, sample = 1)
-    # MetaboProcess::plot_chrDf(chrDf_test)
-    # xcms::peaksWithCentWave(int = chrDf_test$intensity, rt = chrDf_test$rt, peakwidth = c(4, 20), snthresh = 1, noise = 1000, prefilter = c(3, 1000), firstBaselineCheck = TRUE)
+    # chrDf_test <- extract_chrDf(sps = sps, mzmin = 323.1300 , mzmax = 323.1400 , rtmin = 490.297 , rtmax = 505.660 , sample = 1)
+    # plot_chrDf(chrDf_test)
+    # calArea(chrDf_test)
     # tmp <- MSnbase::chromatogram(MSnbaseData, rt = c(295.783, 305.663), mz = c(337.1214, 337.1221))
     # MSnbase::plot(tmp[1,3])
     extract_chrDf <- function(sps, mzmin, mzmax, rtmin, rtmax, sample){
@@ -417,6 +417,39 @@ library(tidyverse)
       chrDf <- purrr::list_rbind(peaksData)
       chrDf$rt <- rt
       return(chrDf)
+    }
+    plot_chrDf <- function(chrDf, linewidth = 1, noise = NA, xlim = NA, baseline = FALSE){
+      if(is.numeric(xlim)){
+        chrDf <- chrDf %>%
+          dplyr::filter(rt >= xlim[1] & rt <= xlim[2])
+        ymax <- max(chrDf$intensity)
+      }
+      title <- paste0(round(min(chrDf$mz, na.rm = TRUE), 4), " - ", round(max(chrDf$mz, na.rm = TRUE), 4))
+      p <- ggplot2::ggplot(data = chrDf, mapping = ggplot2::aes(x = rt)) +
+        ggplot2::geom_line(mapping = ggplot2::aes(y = intensity), linewidth = linewidth) +
+        ggplot2::theme_bw() +
+        ggplot2::labs(x = "Retention Time", y = "Intensity", title = title) +
+        ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5, size = 15),
+                       axis.title = ggplot2::element_text(size = 15),
+                       axis.text = ggplot2::element_text(size = 10))
+      if(!is.na(noise)){
+        p <- p + ggplot2::geom_hline(ggplot2::aes(yintercept = noise),
+                                     color = "#990000",
+                                     linewidth = linewidth,
+                                     linetype = "dashed")
+      }
+      if(is.numeric(xlim)){
+        p <- p + ggplot2::ylim(c(0, ymax))
+      }
+      if(baseline){
+        p <- p + ggplot2::geom_line(ggplot2::aes(x = rt, y = baseline), col = "red", linewidth = 1, linetype = "dashed")
+      }
+      return(p)
+    }
+    calArea <- function(chrDf){
+      fwhm_tmp <- max(chrDf$rt) - min(chrDf$rt)
+      tmp <- xcms::peaksWithMatchedFilter(int = chrDf$intensity, rt = chrDf$rt, fwhm = fwhm_tmp, snthresh = 0)
+      return(tmp)
     }
   }
 }
@@ -583,7 +616,7 @@ library(tidyverse)
       peakGroupTibble <- peakGroupTibble %>% 
         filter(!is.na(tagNum)) %>% 
         filter(mass > 0) %>% 
-        filter(peaksNum >=3) %>% 
+        filter(peaksNum > 3) %>% 
         arrange(mass)
       peakGroupTibble_list[[i]] <- peakGroupTibble
     }
@@ -689,6 +722,90 @@ library(tidyverse)
     #   }
     # })
     # alignedGroupList <- alignedGroupList[logical_delete]
+  }
+  
+  # 3.3 Force extract signal
+  {
+    fillId <- 1
+    for(i in 1:length(alignedGroupList)){
+      alignedGroup_tmp <- alignedGroupList[[i]]
+      print(paste0("i = ", i))
+      for(j in 1:nrow(alignedGroup_tmp)){
+        print(paste0("j = ", j))
+        peakGroup <- alignedGroup_tmp[j, ]$peakGroup[[1]]
+        if(nrow(peakGroup) == 6) next
+        missing_channelIdx <- setdiff(1:6, as.integer(peakGroup$channelIdx))
+        existing_channelIdx <- as.integer(peakGroup$channelIdx)
+        SegList <- split(existing_channelIdx, cumsum(c(1, diff(existing_channelIdx) != 1)))
+        SegLength <- sapply(SegList, length)
+        seg <- SegList[[which.max(SegLength)]]
+        peakGroup_seg <- peakGroup %>% 
+          filter(channelIdx %in% seg)
+        delta_rtmin <- mean(abs(diff(peakGroup_seg$rtmin)))
+        delta_rtmax <- mean(abs(diff(peakGroup_seg$rtmax)))
+        delta_rt_tmp  <- mean(abs(diff(peakGroup_seg$rt)))
+        for(l in 1:length(missing_channelIdx)){
+          print(paste0("l = ", l))
+          missing_channelIdx_tmp <- missing_channelIdx[l]
+          nearestChannel <- existing_channelIdx[which.min(abs(existing_channelIdx - missing_channelIdx_tmp))]
+          nearestPeak <- peakGroup %>% 
+            filter(channelIdx == nearestChannel)
+          missing_class <- unique(nearestPeak$class)
+          if(missing_class == "P1"){
+            missing_specialFragment <- Q3_P1[missing_channelIdx_tmp]
+          }else if(missing_class == "A1"){
+            missing_specialFragment <- Q3_A1[missing_channelIdx_tmp]
+          }else if(missing_class == "A2"){
+            missing_specialFragment <- Q3_A2[missing_channelIdx_tmp]
+          }else if(missing_class == "A3"){
+            missing_specialFragment <- Q3_A3[missing_channelIdx_tmp]
+          }
+          missing_precursorMz <- nearestPeak$precursorMz + (missing_channelIdx_tmp - nearestChannel) * deltaMz
+          missing_mz <- nearestPeak$mz + (missing_channelIdx_tmp - nearestChannel) * deltaMz
+          missing_rt <- nearestPeak$rt + (nearestChannel - missing_channelIdx_tmp) * delta_rt_tmp
+          missing_mzmin <- nearestPeak$mzmin + (missing_channelIdx_tmp - nearestChannel) * deltaMz
+          missing_mzmax <- nearestPeak$mzmax + (missing_channelIdx_tmp - nearestChannel) * deltaMz
+          if(missing_channelIdx_tmp == 4 & nearestChannel == 3){
+            missing_rtmin <- nearestPeak$rtmin - (nearestChannel - missing_channelIdx_tmp) * delta_rtmin
+            missing_rtmax <- nearestPeak$rtmax - (nearestChannel - missing_channelIdx_tmp) * delta_rtmax
+            if((missing_rtmax - missing_rtmin) < 2){
+              missing_rtmax <- missing_rt + 10
+              missing_rtmin <- missing_rt - 10
+            }
+          }else{
+            missing_rtmin <- nearestPeak$rtmin + (nearestChannel - missing_channelIdx_tmp) * delta_rtmin
+            missing_rtmax <- nearestPeak$rtmax + (nearestChannel - missing_channelIdx_tmp) * delta_rtmax
+            if((missing_rtmax - missing_rtmin) < 2){
+              missing_rtmax <- missing_rt + 10
+              missing_rtmin <- missing_rt - 10
+            }
+          }
+          
+          # 计算频率表，忽略NA值
+          freq_table <- table(peakGroup$tagNum, useNA = "no")
+          
+          # 找到频率最高的数值
+          most_frequent_value <- as.numeric(names(freq_table)[which.max(freq_table)])
+          chrDf <- extract_chrDf(sps = sps, mzmin = missing_mzmin , mzmax = missing_mzmax , rtmin = missing_rtmin , rtmax = missing_rtmax , sample = unique(peakGroup$sample))
+          if(nrow(chrDf) <=3 ) next
+          chrDf_info <- calArea(chrDf)
+          if(nrow(chrDf_info) > 1){
+            chrDf_info <- t(as.matrix(chrDf_info[which.max(chrDf_info[,"sn"]),]))
+          }
+          fill_peak <- dplyr::tibble(peak_id = paste0("FP", fillId), 
+                                     mz = missing_mz, mzmin = missing_mzmin, mzmax = missing_mzmax, 
+                                     rt = chrDf_info[1, "rt"], rtmin = chrDf_info[1, "rtmin"], rtmax = chrDf_info[1, "rtmax"],
+                                     into = chrDf_info[1, "into"], intb = chrDf_info[1, "into"], maxo = chrDf_info[1, "maxo"],
+                                     sn = chrDf_info[1, "sn"], sample = unique(peakGroup$sample),
+                                     spectra = list(NULL), precursorMz = missing_precursorMz, specialFragment = missing_specialFragment, class = missing_class,
+                                     channelIdx = missing_channelIdx_tmp, tagNum = most_frequent_value)
+          fillId <- fillId + 1
+          peakGroup <- rbind(peakGroup, fill_peak) %>% arrange(channelIdx)
+        }
+        alignedGroup_tmp[j, ]$peakGroup[[1]] <- peakGroup
+      }
+      alignedGroupList[[i]] <- alignedGroup_tmp
+    }
   }
 }
 # ****** 3. Feature aligning ****** #
