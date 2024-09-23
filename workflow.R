@@ -21,8 +21,8 @@ library(tidyverse)
     Q3_P1 <- c(199.1351, 201.1482, 203.1604, 205.1734, 207.1857, 209.1986)
     Q3 <- c(Q3_A1, Q3_A2, Q3_A3, Q3_P1)
     
-    cwp_centroid <- xcms::CentWaveParam(snthresh = 3, noise = 1000, ppm = 25,
-                                        peakwidth = c(4, 20), firstBaselineCheck = TRUE, prefilter = c(3, 1000))
+    cwp_centroid <- xcms::CentWaveParam(snthresh = 1, noise = 100, ppm = 30,
+                                        peakwidth = c(4, 20), firstBaselineCheck = FALSE, prefilter = c(3, 100))
     
     quan <- "into" # into, intb, maxo
   }
@@ -30,7 +30,7 @@ library(tidyverse)
   # 0.2 Load data
   {
     res_dir <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/experiments/240812/"
-    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/test_data/mix6/"
+    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/test_data/mix1/"
     files_path <- list.files(dir_path, pattern = ".mzML")
     files_path <- paste0(dir_path, files_path)
     
@@ -830,10 +830,10 @@ library(tidyverse)
       feature_class <- alignedGroupList[[i]]$class[1]
       if(feature_class %in% c("A1", "A2", "A3")){
         res <- AmidoLibrary %>% 
-          filter(near(feature_mass, Mass, tol = 0.05))
+          filter(near(feature_mass, Mass, tol = 0.03))
       }else if(feature_class %in% c("P1")){
         res <- PheHydroLibrary %>% 
-          filter(near(feature_mass, Mass, tol = 0.05))
+          filter(near(feature_mass, Mass, tol = 0.03))
       }
       resList <- append(resList, list(res))
     }
