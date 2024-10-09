@@ -44,3 +44,6 @@ ggplot2::ggplot(df, aes(RT_obs, RT_pred)) +
   ggplot2::geom_abline(intercept = 0, 
                        slope = 1, color = "#D02937")
 p.model.features(rf, mdl_type = "rf")
+
+saveRDS(training, file = "./RT_prediction/training.rds")
+saveRDS(rf, file = "./RT_prediction/rf.rds")
