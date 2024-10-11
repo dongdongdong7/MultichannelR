@@ -29,8 +29,8 @@ library(tidyverse)
   
   # 0.2 Load data
   {
-    res_dir <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/experiments/240812/"
-    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/test_data/mix1/"
+    res_dir <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/experiments/241009/"
+    dir_path <- "D:/fudan/Projects/2024/MultichannelR/Progress/build_package/test_data/AP/mix1/"
     files_path <- list.files(dir_path, pattern = ".mzML")
     files_path <- paste0(dir_path, files_path)
     
@@ -703,7 +703,9 @@ library(tidyverse)
                        ref_tagNum == tmp_tagNum &
                        ref_class == tmp_class)
         if(length(idx) >= 1){
-          alignedGroup <- rbind(alignedGroup, tmp_peakGroupTibble[idx, ])
+          target_idx <- idx[which.min(abs(ref_mass - tmp_mass[idx]))]
+          alignedGroup <- rbind(alignedGroup, tmp_peakGroupTibble[target_idx, ])
+          #peakGroupTibble_list[[j]] <- peakGroupTibble_list[[j]][-target_idx, ]
         }
       }
       if(nrow(alignedGroup) != 1){
@@ -814,12 +816,12 @@ library(tidyverse)
 {
   # 4.1 Load database
   {
-    AmidoLibrary <- read_tsv("D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/Library/AmidoLibrary.txt")
-    AmidoLibrary <- AmidoLibrary %>% 
-      filter(Source == "HMDB")
-    PheHydroLibrary <- read_tsv("D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/Library/PheHydroLibrary.txt")
-    PheHydroLibrary <- PheHydroLibrary %>% 
-      filter(Source == "HMDB")
+    AmidoLibrary <- openxlsx::read.xlsx("D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/Library/AmidoLibrary.xlsx")
+    # AmidoLibrary <- AmidoLibrary %>% 
+    #   filter(Source == "HMDB")
+    PheHydroLibrary <- openxlsx::read.xlsx("D:/fudan/Projects/2024/MultichannelR/Progress/build_package/MultichannelR/Library/PheHydroLibrary.xlsx")
+    # PheHydroLibrary <- PheHydroLibrary %>% 
+    #   filter(Source == "HMDB")
   }
   
   # 4.2 Mass match
@@ -830,11 +832,12 @@ library(tidyverse)
       feature_class <- alignedGroupList[[i]]$class[1]
       if(feature_class %in% c("A1", "A2", "A3")){
         res <- AmidoLibrary %>% 
-          filter(near(feature_mass, Mass, tol = 0.03))
+          filter(near(feature_mass, monisotopic_molecular_weight, tol = 0.03))
       }else if(feature_class %in% c("P1")){
         res <- PheHydroLibrary %>% 
-          filter(near(feature_mass, Mass, tol = 0.03))
+          filter(near(feature_mass, monisotopic_molecular_weight, tol = 0.03))
       }
+      res <- res[order(abs(mean(alignedGroupList[[i]]$rt) - res$RTP * 60)), ]
       resList <- append(resList, list(res))
     }
   }
@@ -845,10 +848,10 @@ library(tidyverse)
 {
   # 5.1 创建report表格
   {
-    report <- as.data.frame(matrix(NA, ncol = 25, nrow = 0))
     sampleIdx_channelIdx <- unlist(map(1:sampleNumber, function(x){
       paste0(x, "_", 1:channelNumber)
     }))
+    report <- as.data.frame(matrix(NA, ncol = (7 + channelNumber * sampleNumber), nrow = 0))
     colnames(report) <- c("Mass", "Rt", "Formula", "Class", "TagNumber", "Metabolites", "ID",
                           sampleIdx_channelIdx)
     report <- as_tibble(report)
@@ -867,9 +870,9 @@ library(tidyverse)
         Metabolites <- NA
         ID <- NA
       }else{
-        Formula <- paste0(unique(res$Formula), collapse = "|")
-        Metabolites <- paste0(res$Name, collapse = "|")
-        ID <- paste0(res$ID, collapse = "|")
+        Formula <- paste0(unique(res$chemical_formula ), collapse = "|")
+        Metabolites <- paste0(res$name, collapse = "|")
+        ID <- paste0(res$accession, collapse = "|")
       }
       report_tmp[1, "Mass"] <- Mass
       report_tmp[1, "Rt"] <- Rt
@@ -892,7 +895,7 @@ library(tidyverse)
   # 5.2 mae%rmse 计算
   {
     maeVec <- sapply(1:nrow(report), function(i) {
-      values <- report[i, 8:25][!is.na(report[i, 8:25])]
+      values <- report[i, 8:(7 + channelNumber * sampleNumber)][!is.na(report[i, 8:(7 + channelNumber * sampleNumber)])]
       ratios <- outer(values, values, "/")
       ratios_upper <- ratios[upper.tri(ratios)]
       differences <- ratios_upper - 1
@@ -902,7 +905,7 @@ library(tidyverse)
     report$mae <- maeVec
     
     rmseVec <- sapply(1:nrow(report), function(i) {
-      values <- report[i, 8:25][!is.na(report[i, 8:25])]
+      values <- report[i, 8:(7 + channelNumber * sampleNumber)][!is.na(report[i, 8:(7 + channelNumber * sampleNumber)])]
       ratios <- outer(values, values, "/")
       ratios_upper <- ratios[upper.tri(ratios)]
       differences <- ratios_upper - 1
