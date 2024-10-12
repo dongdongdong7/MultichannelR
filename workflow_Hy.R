@@ -644,38 +644,42 @@ library(tidyverse)
 {
   # 3.1 Align
   {
-    ref_idx <- 1
-    all_idx <- 1:sampleNumber
-    other_idx <- setdiff(all_idx, ref_idx)
-    ref_peakGroupTibble <- peakGroupTibble_list[[ref_idx]]
-    alignedGroupList <- list()
-    for(i in 1:nrow(ref_peakGroupTibble)){
-      refGroup <- ref_peakGroupTibble[i, ]
-      alignedGroup <- refGroup
-      ref_mass <- refGroup$mass
-      ref_rt <- refGroup$rt
-      ref_tagNum <- refGroup$tagNum
-      ref_class <- refGroup$class
-      for(j in other_idx){
-        tmp_peakGroupTibble <- peakGroupTibble_list[[j]]
-        tmp_mass <- tmp_peakGroupTibble$mass
-        tmp_rt <- tmp_peakGroupTibble$rt
-        tmp_tagNum <- tmp_peakGroupTibble$tagNum
-        tmp_class <- tmp_peakGroupTibble$class
-        
-        idx <- which(near(ref_mass, tmp_mass, tol = tolMz1) &
-                       near(ref_rt, tmp_rt, tol = 5) &
-                       ref_tagNum == tmp_tagNum &
-                       ref_class == tmp_class)
-        if(length(idx) >= 1){
-          target_idx <- idx[which.min(abs(ref_mass - tmp_mass[idx]))]
-          alignedGroup <- rbind(alignedGroup, tmp_peakGroupTibble[target_idx, ])
-          #peakGroupTibble_list[[j]] <- peakGroupTibble_list[[j]][-target_idx, ]
+    if(sampleNumber > 1){
+      ref_idx <- 1
+      all_idx <- 1:sampleNumber
+      other_idx <- setdiff(all_idx, ref_idx)
+      ref_peakGroupTibble <- peakGroupTibble_list[[ref_idx]]
+      alignedGroupList <- list()
+      for(i in 1:nrow(ref_peakGroupTibble)){
+        refGroup <- ref_peakGroupTibble[i, ]
+        alignedGroup <- refGroup
+        ref_mass <- refGroup$mass
+        ref_rt <- refGroup$rt
+        ref_tagNum <- refGroup$tagNum
+        ref_class <- refGroup$class
+        for(j in other_idx){
+          tmp_peakGroupTibble <- peakGroupTibble_list[[j]]
+          tmp_mass <- tmp_peakGroupTibble$mass
+          tmp_rt <- tmp_peakGroupTibble$rt
+          tmp_tagNum <- tmp_peakGroupTibble$tagNum
+          tmp_class <- tmp_peakGroupTibble$class
+          
+          idx <- which(near(ref_mass, tmp_mass, tol = tolMz1) &
+                         near(ref_rt, tmp_rt, tol = 5) &
+                         ref_tagNum == tmp_tagNum &
+                         ref_class == tmp_class)
+          if(length(idx) >= 1){
+            target_idx <- idx[which.min(abs(ref_mass - tmp_mass[idx]))]
+            alignedGroup <- rbind(alignedGroup, tmp_peakGroupTibble[target_idx, ])
+            #peakGroupTibble_list[[j]] <- peakGroupTibble_list[[j]][-target_idx, ]
+          }
+        }
+        if(nrow(alignedGroup) != 1){
+          alignedGroupList <- append(alignedGroupList, list(alignedGroup))
         }
       }
-      if(nrow(alignedGroup) != 1){
-        alignedGroupList <- append(alignedGroupList, list(alignedGroup))
-      }
+    }else{
+      alignedGroupList <- lapply(1:nrow(peakGroupTibble_list[[1]]), function(i) {peakGroupTibble_list[[1]][i, ]})
     }
   }
   
