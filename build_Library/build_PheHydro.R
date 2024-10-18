@@ -57,23 +57,24 @@ inchikey_der_vec <- sapply(smiles_der_vec, rinchi::get.inchi.key)
 PheHydroLibrary$smiles_der <- smiles_der_vec
 PheHydroLibrary$inchi_der <- inchi_der_vec
 PheHydroLibrary$inchikey_der <- inchikey_der_vec
-#saveRDS(PheHydroLibrary, "./build_Library/PheHydroLibrary.rds")
+saveRDS(PheHydroLibrary, "./build_Library/PheHydroLibrary.rds")
 
 # Predict RT
 Retip::prep.wizard()
-rf <- readRDS("./rf.rds")
+xgb <- readRDS("./xgb.rds")
 training <- readRDS("./training.rds")
 PheHydroLibrary <- readRDS("./PheHydroLibrary.rds")
 rp_ext <- PheHydroLibrary %>% 
   dplyr::select(accession, inchikey_der, smiles_der)
 colnames(rp_ext) <- c("NAME", "INCHKEY", "SMILES")
 rp_ext_desc <- Retip::getCD(rp_ext)
+# rp_ext_desc <- readRDS("./rp_ext_desc_PheHydro.rds")
 #saveRDS(rp_ext_desc, "./rp_ext_desc_PheHydro.rds")
 db_rt_ext <- Retip::proc.data(rp_ext_desc)
-rp_ext_pred_rf <- Retip::RT.spell(training, rp_ext_desc, model = rf)
+rp_ext_pred_xgb <- Retip::RT.spell(training, rp_ext_desc, model = xgb)
 
 PheHydroLibrary <- PheHydroLibrary %>% 
-  dplyr::left_join(rp_ext_pred_rf, by = c("accession" = "NAME")) %>% 
+  dplyr::left_join(rp_ext_pred_xgb, by = c("accession" = "NAME")) %>% 
   dplyr::select(accession, name, chemical_formula, monisotopic_molecular_weight, smiles, inchi, inchikey, smiles_der, inchi_der, inchikey_der, RTP)
 
 openxlsx::write.xlsx(PheHydroLibrary, "./PheHydroLibrary.xlsx")

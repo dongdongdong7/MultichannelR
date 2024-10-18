@@ -21,31 +21,13 @@ logical_vec <- sapply(1:nrow(hmdbCmpTb), function(i) {
 hmdbCmpTb_Hydroxyl <- hmdbCmpTb[which(logical_vec), ]
 # remove lipid and mass > 1000
 hmdbCmpTb_Hydroxyl <- hmdbCmpTb_Hydroxyl %>%
-  dplyr::filter(monisotopic_molecular_weight < 1000) %>% 
-  dplyr::filter(!stringr::str_detect(name, "PE[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PS[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PA[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PG[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PC[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PGP[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "DG[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "MG[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PEP[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "[Cc]er[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PI[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PIP[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "PIP2[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "SM[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "CL[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "Phosphatidylethanolamine[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "Phosphatidylserine[\\(\\s-]")) %>%
-  dplyr::filter(!stringr::str_detect(name, "Phytosphingosine[\\(\\s-]"))
+  dplyr::filter(monisotopic_molecular_weight < 1000)
 
-kingdom_vec <- sapply(hmdbCmpTb_Hydroxyl$taxonomy, function(x) {x$kingdom})
-super_class_vec <- sapply(hmdbCmpTb_Hydroxyl$taxonomy, function(x) {x$super_class})
-
-hmdbCmpTb_Hydroxyl <- hmdbCmpTb_Hydroxyl[-c(which(kingdom_vec == "Inorganic compounds"),
-                                      which(super_class_vec == "Lipids and lipid-like molecules")), ]
+# kingdom_vec <- sapply(hmdbCmpTb_Hydroxyl$taxonomy, function(x) {x$kingdom})
+# super_class_vec <- sapply(hmdbCmpTb_Hydroxyl$taxonomy, function(x) {x$super_class})
+# 
+# hmdbCmpTb_Hydroxyl <- hmdbCmpTb_Hydroxyl[-c(which(kingdom_vec == "Inorganic compounds"),
+#                                       which(super_class_vec == "Lipids and lipid-like molecules")), ]
 
 HydroxylLibrary <- hmdbCmpTb_Hydroxyl %>% 
   dplyr::select(accession, name, chemical_formula, monisotopic_molecular_weight, smiles, inchi, inchikey)
@@ -75,7 +57,7 @@ HydroxylLibrary <- HydroxylLibrary %>%
 
 # Predict RT
 Retip::prep.wizard()
-rf <- readRDS("./rf.rds")
+xgb <- readRDS("./xgb.rds")
 training <- readRDS("./training.rds")
 HydroxylLibrary <- readRDS("./HydroxylLibrary.rds")
 rp_ext <- HydroxylLibrary %>% 
@@ -84,10 +66,10 @@ colnames(rp_ext) <- c("NAME", "INCHKEY", "SMILES")
 rp_ext_desc <- Retip::getCD(rp_ext)
 #saveRDS(rp_ext_desc, "./rp_ext_desc_Hydroxyl.rds")
 db_rt_ext <- Retip::proc.data(rp_ext_desc)
-rp_ext_pred_rf <- Retip::RT.spell(training, rp_ext_desc, model = rf)
+rp_ext_pred_xgb <- Retip::RT.spell(training, rp_ext_desc, model = xgb)
 
 HydroxylLibrary <- HydroxylLibrary %>% 
-  dplyr::left_join(rp_ext_pred_rf, by = c("accession" = "NAME")) %>% 
+  dplyr::left_join(rp_ext_pred_xgb, by = c("accession" = "NAME")) %>% 
   dplyr::select(accession, name, chemical_formula, monisotopic_molecular_weight, smiles, inchi, inchikey, smiles_der, inchi_der, inchikey_der, RTP)
 
 openxlsx::write.xlsx(HydroxylLibrary, "./HydroxylLibrary.xlsx")
