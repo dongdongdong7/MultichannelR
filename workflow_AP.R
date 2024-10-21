@@ -83,7 +83,7 @@ library(tidyverse)
     }
     # 1.3 将一个质谱标准化
     # sp2是一个单独的spectra
-    standardizeSpectra <- function(sp2){
+    standardizeSpectra <- function(sp2, th = 0.01){
       
       if(is.null(sp2)){
         return(sp2)
@@ -95,7 +95,7 @@ library(tidyverse)
         z
       }
       
-      sp2 <- Spectra::filterIntensity(sp2, intensity = max(Spectra::intensity(sp2)) * 0.05)
+      sp2 <- Spectra::filterIntensity(sp2, intensity = max(Spectra::intensity(sp2)) * th)
       sp2 <- Spectra::addProcessing(sp2, FUN = norm_fun)
       
       return(sp2)
@@ -115,6 +115,53 @@ library(tidyverse)
       }
       label_point <- c(df$int[1:num], rep(NA, n - num))
       label_text <- as.character(c(sprintf("%.4f", df$mz[1:num]), rep(NA, n-num)))
+      df$label_point <- label_point
+      df$label_text <- label_text
+      
+      p <- ggplot(df, aes(x = mz, y = int)) +
+        geom_segment(aes(x = mz, xend = mz, y = 0, yend = int), color = "grey") + 
+        geom_point(aes(x = mz, y = label_point), color = "orange", size = 4) + 
+        ggrepel::geom_text_repel(aes(label = label_text), size = 4, vjust = -1, min.segment.length = Inf) + 
+        labs(title = sp2$peak_id, subtitle = paste0("Retention time: ", sprintf("%.4f", Spectra::rtime(sp2)))) + 
+        theme_classic()
+      return(p)
+    }
+    # 2.2 绘制一张spectra, 只显示母离子和特征碎片
+    # sp2 就是Spectra package中的一个spectra
+    plot_spectra2 <- function(sp2, type  = c("A", "P", "Hy")[1]){
+      Q3_Hy <- c(280.1000, 282.1136, 284.1247, 286.1369, 288.1494, 290.1631)
+      Q3_A1 <- c(171.1038, 172.1101, 173.1165, 174.1229, 175.1291, 176.1351)
+      Q3_A2 <- c(198.1276, 200.1398, 202.1527, 204.1652, 206.1776, 208.1899)
+      Q3_A3 <- c(381.1267, 383.1393, 385.1581, 387.1644, 389.1770, 391.1895)
+      Q3_P1 <- c(199.1351, 201.1482, 203.1604, 205.1734, 207.1857, 209.1986)
+      Q3_A <- c(Q3_A1, Q3_A2, Q3_A3)
+      
+      mz <- unlist(Spectra::mz(sp2))
+      int <- unlist(Spectra::intensity(sp2))
+      df <- tibble(mz = mz, int = int) %>% 
+        arrange(desc(int))
+      n <- nrow(df)
+      parent_index <- which.max(df$int)
+      if(type == "Hy"){
+        special_index <- which(sapply(df$mz, function(x) {
+          any(near(abs(x - Q3_Hy), 0, tol = 0.01))
+        }))
+        special_index <- special_index[which.max(df$int[special_index])]
+      }else if(type == "A"){
+        special_index <- which(sapply(df$mz, function(x) {
+          any(near(abs(x - Q3_A), 0, tol = 0.01))
+        }))
+        special_index <- special_index[which.max(df$int[special_index])]
+      }else if(type == "P"){
+        special_index <- which(sapply(df$mz, function(x) {
+          any(near(abs(x - Q3_P1), 0, tol = 0.01))
+        }))
+        special_index <- special_index[which.max(df$int[special_index])]
+      }else stop("Type is wrong!")
+      label_point <- c(rep(NA, n))
+      label_text <- as.character(rep(NA, n))
+      label_point[c(parent_index, special_index)] <- df$int[c(parent_index, special_index)]
+      label_text[c(parent_index, special_index)] <- sapply(df$mz[c(parent_index, special_index)], function(x) {sprintf("%.4f", x)})
       df$label_point <- label_point
       df$label_text <- label_text
       
