@@ -19,6 +19,15 @@ library(tidyverse)
     
     cwp_centroid <- xcms::CentWaveParam(snthresh = 1, noise = 100, ppm = 100,
                                         peakwidth = c(4, 20), firstBaselineCheck = FALSE, prefilter = c(3, 100))
+    # default
+    # cwp_centroid <- xcms::CentWaveParam(snthresh = 1, noise = 100, ppm = 100,
+    #                                     peakwidth = c(4, 20), firstBaselineCheck = FALSE, prefilter = c(3, 100))
+    # mix3
+    # cwp_centroid <- xcms::CentWaveParam(snthresh = 1, noise = 100, ppm = 30,
+    #                                     peakwidth = c(2, 20), firstBaselineCheck = FALSE, prefilter = c(2, 100))
+    # mix5
+    # cwp_centroid <- xcms::CentWaveParam(snthresh = 1, noise = 100, ppm = 100,
+    #                                     peakwidth = c(2, 20), firstBaselineCheck = FALSE, prefilter = c(3, 100))
     
     quan <- "into" # into, intb, maxo
   }
@@ -483,7 +492,7 @@ library(tidyverse)
     peaksInfo_ALL <- MSnbaseDataPeaksInfo # 这个是最原始的peaksInfo, 不经过过滤
     # 进行过滤
     MSnbaseDataPeaksInfo <- MSnbaseDataPeaksInfo %>% 
-      filter(maxo >= 1000)
+      filter(maxo >= 500) # 1000 default; 200 mix5 500 mix3
     nrow(MSnbaseDataPeaksInfo) # 11010
   }
   
